@@ -385,3 +385,6 @@ var/
 venv.bak/
 venv/
 wheels/
+*.docx
+*.pptx
+*.key
