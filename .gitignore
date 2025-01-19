@@ -385,9 +385,6 @@ var/
 venv.bak/
 venv/
 wheels/
-*.docx
-*.pptx
-*.key
 _coursera/6. machine_learning/module_5_end_of_course_project/c6_tiktok_ml/images/Plan.png
 _coursera/6. machine_learning/module_5_end_of_course_project/c6_tiktok_ml/images/Pace.png
 _coursera/6. machine_learning/module_5_end_of_course_project/c6_tiktok_ml/images/images/Plan.png
@@ -398,3 +395,9 @@ _coursera/6. machine_learning/module_5_end_of_course_project/c6_tiktok_ml/images
 _coursera/6. machine_learning/module_5_end_of_course_project/c6_tiktok_ml/images/Execute.png
 _coursera/6. machine_learning/module_5_end_of_course_project/c6_tiktok_ml/images/Construct.png
 _coursera/6. machine_learning/module_5_end_of_course_project/c6_tiktok_ml/images/Analyze.png
+
+*.png
+*.docx
+*.pptx
+*.key
+*.pdf
