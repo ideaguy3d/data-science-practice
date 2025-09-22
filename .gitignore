@@ -396,11 +396,12 @@ _coursera/6. machine_learning/module_5_end_of_course_project/c6_tiktok_ml/images
 _coursera/6. machine_learning/module_5_end_of_course_project/c6_tiktok_ml/images/Construct.png
 _coursera/6. machine_learning/module_5_end_of_course_project/c6_tiktok_ml/images/Analyze.png
 
-*.png
+# *.png
 *.docx
 *.pptx
 *.key
 *.pdf
+*.csv
 .idea
 data/train.csv
 data/test.csv
