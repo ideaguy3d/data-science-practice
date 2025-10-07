@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>2025 Senior Systems Analyst Practical Examination</title>
+<style>
+  /* Screen preview containers that also print cleanly */
+  :root{
+    --page-w: 8.5in;
+    --page-h: 11in;
+    --margin: 1in;        /* required 1" margins on all sides */
+    --font: Arial, Helvetica, sans-serif;
+  }
+
+  /* Base */
+  html, body { height: 100%; background: #f3f3f3; }
+  body { margin: 0; font-family: var(--font); }
+
+  /* Each page is a fixed-size container you can “see” before print */
+  .page {
+    width: var(--page-w);
+    height: var(--page-h);
+    margin: 0.25in auto;
+    background: #fff;
+    box-shadow: 0 0 0.15in rgba(0,0,0,.15);
+    position: relative;
+    /* content area (honors 1" margins visually and in print) */
+    padding: var(--margin);
+    box-sizing: border-box;
+
+    /* REQUIRED formatting */
+    font-size: 12pt;       /* Arial 12pt */
+    line-height: 2.0;      /* double-spaced */
+    color: #000;
+  }
+
+  /* Header/Footer INSIDE the page container (no fixed elements) */
+  .header {
+    position: absolute;
+    top: 0.5in;            /* still inside the 1" padding */
+    right: 1in;
+    font-size: 10pt;
+  }
+  .footer {
+    position: absolute;
+    bottom: 0.5in;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 10pt;
+  }
+
+  /* Main content area offsets so header/footer won’t overlap */
+  .content {
+    position: absolute;
+    top: calc(var(--margin) + 0.25in);
+    left: var(--margin);
+    right: var(--margin);
+    bottom: calc(var(--margin) + 0.35in);
+    overflow: hidden; /* keep each page self-contained */
+  }
+
+  h1, h2, h3 { margin: 0 0 0.2in 0; }
+  .q { font-weight: bold; margin-top: 0.1in; }
+  .section { margin-bottom: 0.25in; }
+
+  /* Clean print: remove outer preview shadow, ensure one PDF page per container */
+  @media print {
+    html, body { background: #fff; }
+    .page { 
+      margin: 0;
+      box-shadow: none;
+      page-break-after: always; /* each .page becomes a PDF page */
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- PAGE 1 -->
+<section class="page">
+  <div class="header">PERSON ID: 33595330</div>
+  <div class="footer">Page 1 of 4</div>
+  <div class="content">
+    <h2>INFORMATION TECHNOLOGY DEPARTMENT</h2>
+    <h3>2025 Senior Systems Analyst — Practical Examination Response</h3>
+
+    <div class="section">
+      <div class="q">1) You are given an existing program with full source code and access to its data sources. How would you approach supporting and planning for the future of this program?</div>
+      I bring the app up in a safe environment, readme/commits first, then draw a quick data/flow diagram. I list bugs, risks, and performance hot spots. Next, I stabilize: add basic tests, pin dependencies, remove hard-coded secrets, set up simple CI and a rollback. I meet stakeholders to confirm what must not break, what can wait, and what to improve. I publish a small roadmap (stability → reliability → new value) with clear owners, SLAs, and success metrics. I finish with plain runbooks and “how to build/deploy/restore” docs.
+    </div>
+
+    <div class="section">
+      <div class="q">2) Describe how you would lead a project where you’re tasked with providing a technical solution to a client’s business problem.</div>
+      I start with a short discovery: problem, users, constraints, risks, and success measures. I translate this into a simple charter and a prioritized backlog. I run short iterations with demos so the client sees progress early. I de-risk with a quick spike on the hardest part. I keep security, data, and infra in scope from day one. Before go-live: UAT, cutover plan, and support plan. After go-live: training, docs, and a brief “what we learned.”
+    </div>
+  </div>
+</section>
+
+<!-- PAGE 2 -->
+<section class="page">
+  <div class="header">PERSON ID: 33595330</div>
+  <div class="footer">Page 2 of 4</div>
+  <div class="content">
+    <div class="section">
+      <div class="q">3) Suppose you need to pull data from one source and integrate it into another. How would you approach this problem considering multiple formats (flat files, APIs, point-to-point connections)?</div>
+      I write a short mapping: keys, fields, types, and cadence. Data lands in a staging area, then transforms, then merges into target (idempotent). Flat files: schema checks, safe batching, clear rejects. APIs: auth, paging, retries, backoff, and audit logs. Point-to-point: prefer a queue/middleware to decouple. I add simple data-quality rules (nulls, ranges, dupes), alerts, and a replay path. A lightweight dashboard shows latency, volume, and failures.
+    </div>
+
+    <div class="section">
+      <div class="q">4) You’re working in a team where several strong personalities insist on an approach that you believe is not the best solution. How would you handle this situation?</div>
+      I make options visible side-by-side with agreed criteria: reliability, security, cost, time, and support load. We run a short, time-boxed prototype to gather data. I separate people from ideas, note trade-offs, and look for “good now, better later.” If needed, I bring in a neutral reviewer and document the decision with a check-in date tied to metrics.
+    </div>
+
+    <div class="section">
+      <div class="q">5) How do you adjust your communication style when discussing complex technical topics with technical peers versus non-technical stakeholders?</div>
+      With peers: precise terms, diagrams, benchmarks, and trade-offs. With non-technical folks: plain language, outcomes, timelines, risks, and cost; one simple visual per idea. In both cases I confirm understanding and next steps in writing.
+    </div>
+  </div>
+</section>
+
+<!-- PAGE 3 -->
+<section class="page">
+  <div class="header">PERSON ID: 33595330</div>
+  <div class="footer">Page 3 of 4</div>
+  <div class="content">
+    <h3>Practical Notes (Condensed Experience)</h3>
+    <div class="section">
+      Data and systems work across Python/SQL/PHP; ETL design and monitoring; CI/CD hygiene; legacy refactors; Tableau/Plotly dashboards; AWS EMR/S3 basics; and GIS field data (ArcGIS). These inform how I stabilize code, move data safely, and ship solutions that are easy to support.
+    </div>
+
+    <h3>Acknowledgement of Authenticity</h3>
+    <div class="section">
+      I certify that this submission is my original work and that I received no unauthorized assistance.
+      <br/><br/>
+      Signature: _______Julius Hernandez________ &nbsp;&nbsp; Date: ____10-6-2025___
+    </div>
+
+    <h3>Confidentiality Agreement</h3>
+    <div class="section">
+      I acknowledge that the contents of this examination are confidential and will not be shared or discussed outside the authorized review process.
+      <br/><br/>
+      Signature: _______Julius Hernandez________ &nbsp;&nbsp; Date: ____10-6-2025___
+    </div>
+
+    <h3>Submission Reminder</h3>
+    <div class="section">
+      Email your response by <strong>5:30 PM on October 6, 2025</strong> to <em>elizabeth.martinez@stocktonca.gov</em> as a digital attachment.
+    </div>
+  </div>
+</section>
+
+<!-- PAGE 4 (Optional spare page for overflow or signatures; keep blank content area aside from header/footer) -->
+<section class="page">
+  <div class="header">PERSON ID: 33595330</div>
+  <div class="footer">Page 4 of 4</div>
+  <div class="content">
+    <!-- Intentionally minimal to ensure max of 4 pages; use if any section spills over -->
+    <h3>Addendum (if needed)</h3>
+    If any answer exceeds space on prior pages, continue here and reference the question number.
+  </div>
+</section>
+
+</body>
+</html>
