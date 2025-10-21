@@ -240,6 +240,7 @@ function loadVocabulary(string $csvPath): array
             'english' => $entry['english'] ?? '',
             'other_common_meanings' => $entry['other_common_meanings'] ?? '',
             'key' => $identifier,
+            'common_definitions' => $entry['common_definitions'] ?? '',
         ];
     }
 
@@ -492,9 +493,28 @@ $pendingRows = array_values(array_filter(
                               data-count="correct">0</span>
                     </button>
                 </div>
-                <p id="practice-feedback" class="hidden text-sm font-medium text-slate-600" role="status" aria-live="polite"></p>
+                <div id="practice-feedback" class="hidden w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm" role="status" aria-live="polite">
+                    <div class="flex items-start justify-between gap-4">
+                        <p id="practice-feedback-message" class="font-medium text-slate-700"></p>
+                        <button id="practice-feedback-close" type="button" class="rounded-md border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
+                            Close
+                        </button>
+                    </div>
+                </div>
             </div>
             <p class="mt-4 text-sm text-slate-600">Type the translation for each word. Correct answers move to your correct list, and incorrect ones go to the incorrect list for review.</p>
+            <div id="practice-summary" class="hidden mt-4 rounded-lg border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h3 class="text-sm font-semibold text-slate-800">Submission Summary</h3>
+                        <p class="mt-1 text-xs text-slate-500">Review your answers, then close this panel when you're ready to continue.</p>
+                    </div>
+                    <button id="practice-summary-close" type="button" class="rounded-md border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
+                        Close
+                    </button>
+                </div>
+                <ul id="practice-summary-list" class="mt-3 space-y-2 text-sm text-slate-700"></ul>
+            </div>
             <div id="practice-list" class="mt-6"></div>
         </section>
     </section>
@@ -516,7 +536,12 @@ $pendingRows = array_values(array_filter(
 
     const tooltipContainer = document.getElementById('tooltip-app');
     const practiceListContainer = document.getElementById('practice-list');
-    const practiceFeedback = document.getElementById('practice-feedback');
+    const practiceFeedbackContainer = document.getElementById('practice-feedback');
+    const practiceFeedbackMessage = document.getElementById('practice-feedback-message');
+    const practiceFeedbackClose = document.getElementById('practice-feedback-close');
+    const practiceSummary = document.getElementById('practice-summary');
+    const practiceSummaryList = document.getElementById('practice-summary-list');
+    const practiceSummaryClose = document.getElementById('practice-summary-close');
 
     const tabButtons = document.querySelectorAll('.tab-button');
     const panels = {
@@ -536,7 +561,7 @@ $pendingRows = array_values(array_filter(
     let activeTab = 'tooltip';
     let activePracticeView = 'pending';
     let languageMode = LANGUAGE_ES_TO_EN;
-    let feedbackTimeout;
+    const entryLookup = new Map();
 
     /**
      * Removes the entry with the provided key from the target array.
@@ -621,23 +646,58 @@ $pendingRows = array_values(array_filter(
      * @returns {void}
      */
     function showPracticeFeedback(type, message) {
-        if (!practiceFeedback) {
+        if (!practiceFeedbackContainer || !practiceFeedbackMessage) {
             return;
         }
 
-        practiceFeedback.textContent = message;
-        practiceFeedback.classList.remove('hidden', 'text-slate-600', 'text-red-500', 'text-emerald-600');
+        practiceFeedbackMessage.textContent = message;
+        practiceFeedbackContainer.classList.remove(
+            'hidden',
+            'border-slate-200',
+            'border-emerald-300',
+            'border-red-300'
+        );
+        practiceFeedbackMessage.classList.remove('text-slate-700', 'text-emerald-600', 'text-red-600');
 
-        const colorClass = type === 'success'
-            ? 'text-emerald-600'
-            : (type === 'error' ? 'text-red-500' : 'text-slate-600');
+        if (type === 'success') {
+            practiceFeedbackContainer.classList.add('border-emerald-300');
+            practiceFeedbackMessage.classList.add('text-emerald-600');
+        } else if (type === 'error') {
+            practiceFeedbackContainer.classList.add('border-red-300');
+            practiceFeedbackMessage.classList.add('text-red-600');
+        } else {
+            practiceFeedbackContainer.classList.add('border-slate-200');
+            practiceFeedbackMessage.classList.add('text-slate-700');
+        }
+    }
 
-        practiceFeedback.classList.add(colorClass);
+    /**
+     * Hides the practice feedback panel.
+     *
+     * @returns {void}
+     */
+    function hidePracticeFeedback() {
+        if (!practiceFeedbackContainer) {
+            return;
+        }
+        practiceFeedbackContainer.classList.add('hidden');
+    }
 
-        clearTimeout(feedbackTimeout);
-        feedbackTimeout = setTimeout(() => {
-            practiceFeedback.classList.add('hidden');
-        }, 4000);
+    /**
+     * Splits definition text into individual lines.
+     *
+     * @param {object} entry Vocabulary entry containing tooltip metadata.
+     * @returns {Array<string>} Sanitized definition lines.
+     */
+    function getDefinitionLines(entry) {
+        if (!entry || typeof entry.common_definitions !== 'string') {
+            return [];
+        }
+
+        return entry.common_definitions
+            .split('|')
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0);
     }
 
     /**
@@ -687,13 +747,20 @@ $pendingRows = array_values(array_filter(
                 ? entry.spanish
                 : (entry.english || 'Translation unavailable');
 
-            tooltip.textContent = tooltipValue || 'Translation unavailable';
+            const tooltipPrimary = document.createElement('div');
+            tooltipPrimary.textContent = tooltipValue || 'Translation unavailable';
+            tooltip.appendChild(tooltipPrimary);
 
-            if (languageMode === LANGUAGE_ES_TO_EN && entry.other_common_meanings) {
-                const extra = document.createElement('div');
-                extra.className = 'mt-2 text-xs text-slate-200';
-                extra.textContent = entry.other_common_meanings;
-                tooltip.appendChild(extra);
+            const definitions = getDefinitionLines(entry);
+            if (definitions.length > 0) {
+                const defList = document.createElement('ul');
+                defList.className = 'mt-2 list-disc space-y-1 pl-5 text-xs text-slate-200';
+                definitions.forEach((definition) => {
+                    const li = document.createElement('li');
+                    li.textContent = definition;
+                    defList.appendChild(li);
+                });
+                tooltip.appendChild(defList);
             }
 
             item.appendChild(word);
@@ -757,74 +824,227 @@ $pendingRows = array_values(array_filter(
     }
 
     /**
-     * Submits and evaluates a practice answer.
+     * Disables or enables all practice inputs and submit buttons.
+     *
+     * @param {boolean} disabled Whether elements should be disabled.
+     * @returns {void}
+     */
+    function setPracticeInputsDisabled(disabled) {
+        if (!practiceListContainer) {
+            return;
+        }
+
+        const inputs = practiceListContainer.querySelectorAll('.practice-input');
+        inputs.forEach((input) => {
+            input.disabled = disabled;
+        });
+
+        const buttons = practiceListContainer.querySelectorAll('.practice-submit');
+        buttons.forEach((button) => {
+            const btn = /** @type {HTMLButtonElement} */ (button);
+            if (!btn.dataset.label) {
+                btn.dataset.label = btn.textContent ?? 'Submit';
+            }
+            btn.disabled = disabled;
+            btn.textContent = disabled ? 'Submitting…' : btn.dataset.label;
+        });
+    }
+
+    /**
+     * Collects all practice inputs that currently contain learner responses.
+     *
+     * @returns {Array<{entry: object, input: HTMLInputElement, guess: string}>}
+     */
+    function collectFilledInputs() {
+        if (!practiceListContainer) {
+            return [];
+        }
+
+        const filled = [];
+        const inputs = practiceListContainer.querySelectorAll('.practice-input');
+        inputs.forEach((element) => {
+            const input = /** @type {HTMLInputElement} */ (element);
+            const value = input.value.trim();
+            if (value === '') {
+                return;
+            }
+
+            const key = input.getAttribute('data-entry-key');
+            if (!key || !entryLookup.has(key)) {
+                return;
+            }
+
+            const entry = entryLookup.get(key);
+            if (!entry) {
+                return;
+            }
+
+            filled.push({ entry, input, guess: value });
+        });
+
+        return filled;
+    }
+
+    /**
+     * Renders the practice submission summary list.
+     *
+     * @param {Array<{entry: object, guess: string, status: string, correctAnswer: string, languageMode: string}>} results Submission outcomes.
+     * @returns {void}
+     */
+    function renderPracticeSummary(results) {
+        if (!practiceSummary || !practiceSummaryList) {
+            return;
+        }
+
+        practiceSummaryList.innerHTML = '';
+
+        if (!Array.isArray(results) || results.length === 0) {
+            practiceSummary.classList.add('hidden');
+            return;
+        }
+
+        results.forEach((item) => {
+            const modeUsed = item.languageMode === LANGUAGE_EN_TO_ES ? LANGUAGE_EN_TO_ES : LANGUAGE_ES_TO_EN;
+            const promptWord = modeUsed === LANGUAGE_EN_TO_ES
+                ? (item.entry.english || item.entry.spanish)
+                : item.entry.spanish;
+            const targetLabel = modeUsed === LANGUAGE_EN_TO_ES ? 'Spanish' : 'English';
+
+            const listItem = document.createElement('li');
+            listItem.className = 'rounded-md bg-slate-50 px-3 py-2';
+
+            const title = document.createElement('div');
+            title.className = 'text-xs font-semibold uppercase tracking-wide text-slate-500';
+            title.textContent = promptWord;
+
+            const detail = document.createElement('div');
+            detail.className = 'mt-1 text-sm text-slate-700';
+
+            const answerSpan = document.createElement('span');
+            answerSpan.className = `font-semibold ${item.status === 'correct' ? 'text-emerald-600' : 'text-red-600'}`;
+            answerSpan.textContent = item.guess || '—';
+
+            const correctSpan = document.createElement('span');
+            correctSpan.className = 'font-semibold text-slate-900';
+            correctSpan.textContent = item.correctAnswer || '—';
+
+            detail.append('You answered ');
+            detail.appendChild(answerSpan);
+            detail.append(`. Correct ${targetLabel}: `);
+            detail.appendChild(correctSpan);
+
+            listItem.appendChild(title);
+            listItem.appendChild(detail);
+            practiceSummaryList.appendChild(listItem);
+        });
+
+        practiceSummary.classList.remove('hidden');
+    }
+
+    /**
+     * Hides the practice submission summary.
+     *
+     * @returns {void}
+     */
+    function hidePracticeSummary() {
+        if (!practiceSummary) {
+            return;
+        }
+        practiceSummary.classList.add('hidden');
+        if (practiceSummaryList) {
+            practiceSummaryList.innerHTML = '';
+        }
+    }
+
+    /**
+     * Sends a single learner guess to the backend and updates local state.
      *
      * @param {object} entry Vocabulary entry being practiced.
-     * @param {HTMLInputElement} inputEl Text input element.
-     * @param {HTMLButtonElement} submitButton Submit button element.
+     * @param {string} guess Learner-provided translation.
+     * @returns {Promise<{entry: object, guess: string, status: string, correctAnswer: string, languageMode: string}>}
+     */
+    async function submitPracticeGuess(entry, guess) {
+        const response = await fetch(window.location.pathname, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'answer',
+                key: entry.key,
+                guess,
+                languageMode,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Request failed with status ${response.status}`);
+        }
+
+        const result = await response.json();
+        if (!result || !result.ok) {
+            throw new Error(result?.error ?? 'Unknown error');
+        }
+
+        const modeUsed = result.languageMode === LANGUAGE_EN_TO_ES ? LANGUAGE_EN_TO_ES : LANGUAGE_ES_TO_EN;
+
+        if (result.result === 'correct') {
+            removeEntryFromArray(practiceState.pending, entry.key);
+            removeEntryFromArray(practiceState.incorrect, entry.key);
+            addEntryIfMissing(practiceState.correct, entry);
+        } else {
+            removeEntryFromArray(practiceState.pending, entry.key);
+            removeEntryFromArray(practiceState.correct, entry.key);
+            addEntryIfMissing(practiceState.incorrect, entry);
+        }
+
+        return {
+            entry,
+            guess,
+            status: result.result,
+            correctAnswer: result.correctAnswer,
+            languageMode: modeUsed,
+        };
+    }
+
+    /**
+     * Processes every filled practice response in a batch submission.
+     *
      * @returns {Promise<void>}
      */
-    async function handlePracticeSubmission(entry, inputEl, submitButton) {
-        const guess = inputEl.value.trim();
-        if (guess === '') {
-            inputEl.focus();
+    async function processBatchSubmissions() {
+        const filled = collectFilledInputs();
+        if (filled.length === 0) {
+            showPracticeFeedback('info', 'Enter a translation before submitting.');
+            const firstInput = practiceListContainer?.querySelector('.practice-input');
+            if (firstInput instanceof HTMLInputElement) {
+                firstInput.focus();
+            }
             return;
         }
 
-        submitButton.disabled = true;
-        submitButton.textContent = 'Checking…';
+        hidePracticeFeedback();
+        hidePracticeSummary();
+        setPracticeInputsDisabled(true);
 
-        try {
-            const response = await fetch(window.location.pathname, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    action: 'answer',
-                    key: entry.key,
-                    guess,
-                    languageMode,
-                }),
-            });
+        const results = [];
 
-            if (!response.ok) {
-                throw new Error(`Request failed with status ${response.status}`);
+        for (const item of filled) {
+            try {
+                const submission = await submitPracticeGuess(item.entry, item.guess);
+                results.push(submission);
+            } catch (error) {
+                console.error('Unable to evaluate answer:', error);
+                showPracticeFeedback('error', 'Unable to check that answer. Please try again.');
+                renderPracticeList();
+                setPracticeInputsDisabled(false);
+                return;
             }
-
-            const result = await response.json();
-            if (!result || !result.ok) {
-                throw new Error(result?.error ?? 'Unknown error');
-            }
-
-            const promptWord = languageMode === LANGUAGE_EN_TO_ES
-                ? (entry.english || entry.spanish)
-                : entry.spanish;
-
-            if (result.result === 'correct') {
-                removeEntryFromArray(practiceState.pending, entry.key);
-                removeEntryFromArray(practiceState.incorrect, entry.key);
-                addEntryIfMissing(practiceState.correct, entry);
-                showPracticeFeedback('success', `${promptWord}: Correct!`);
-            } else if (result.result === 'incorrect') {
-                removeEntryFromArray(practiceState.pending, entry.key);
-                addEntryIfMissing(practiceState.incorrect, entry);
-                const answer = result.correctAnswer ? ` Correct answer: ${result.correctAnswer}.` : '';
-                showPracticeFeedback('error', `${promptWord}: Not quite.${answer}`);
-            }
-
-            inputEl.value = '';
-            renderPracticeList();
-        } catch (error) {
-            console.error('Unable to evaluate answer:', error);
-            submitButton.disabled = false;
-            submitButton.textContent = 'Submit';
-            showPracticeFeedback('error', 'Unable to check that answer. Please try again.');
-            return;
         }
 
-        submitButton.disabled = false;
-        submitButton.textContent = 'Submit';
+        renderPracticeList();
+        setPracticeInputsDisabled(false);
+        renderPracticeSummary(results);
     }
 
     /**
@@ -835,6 +1055,7 @@ $pendingRows = array_values(array_filter(
     function renderPracticeList() {
         updatePracticeCounts();
         practiceListContainer.innerHTML = '';
+        entryLookup.clear();
 
         practiceViewButtons.forEach((button) => {
             const view = button.getAttribute('data-practice-view');
@@ -875,6 +1096,8 @@ $pendingRows = array_values(array_filter(
         list.className = 'grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4';
 
         source.forEach((entry) => {
+            entryLookup.set(entry.key, entry);
+
             const item = document.createElement('li');
             item.className = 'relative flex flex-col justify-between gap-4 rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm transition-shadow hover:shadow-md';
 
@@ -889,9 +1112,14 @@ $pendingRows = array_values(array_filter(
             if (activePracticeView === 'correct') {
                 const answer = document.createElement('p');
                 answer.className = 'text-sm text-slate-600';
-                answer.innerHTML = languageMode === LANGUAGE_EN_TO_ES
-                    ? `<span class="font-semibold text-emerald-600">${entry.spanish}</span>`
-                    : `<span class="font-semibold text-emerald-600">${entry.english || 'Translation unavailable'}</span>`;
+
+                const label = document.createElement('span');
+                label.className = 'font-semibold text-emerald-600';
+                label.textContent = languageMode === LANGUAGE_EN_TO_ES
+                    ? entry.spanish
+                    : (entry.english || 'Translation unavailable');
+
+                answer.appendChild(label);
                 item.appendChild(answer);
                 list.appendChild(item);
                 return;
@@ -906,16 +1134,18 @@ $pendingRows = array_values(array_filter(
             input.placeholder = languageMode === LANGUAGE_EN_TO_ES
                 ? 'Enter Spanish translation'
                 : 'Enter English translation';
-            input.className = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-300';
+            input.className = 'practice-input w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-300';
+            input.setAttribute('data-entry-key', entry.key);
 
             const submit = document.createElement('button');
             submit.type = 'submit';
-            submit.className = 'inline-flex items-center justify-center rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500';
+            submit.className = 'practice-submit inline-flex items-center justify-center rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500';
+            submit.dataset.label = 'Submit';
             submit.textContent = 'Submit';
 
             form.addEventListener('submit', (event) => {
                 event.preventDefault();
-                handlePracticeSubmission(entry, input, submit);
+                processBatchSubmissions();
             });
 
             form.appendChild(input);
@@ -1025,6 +1255,18 @@ $pendingRows = array_values(array_filter(
             updateLanguageMode(button);
         });
     });
+
+    if (practiceFeedbackClose) {
+        practiceFeedbackClose.addEventListener('click', () => {
+            hidePracticeFeedback();
+        });
+    }
+
+    if (practiceSummaryClose) {
+        practiceSummaryClose.addEventListener('click', () => {
+            hidePracticeSummary();
+        });
+    }
 
     renderTooltipList();
     renderPracticeList();
