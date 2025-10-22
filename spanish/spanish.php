@@ -190,6 +190,56 @@ function expandAnswerVariants(string $value): array
 }
 
 /**
+ * Attempts to infer a sensible part of speech using simple heuristics.
+ *
+ * @param string $english Canonical English translation.
+ * @param string $spanish Original Spanish term (used as fallback).
+ * @return string Uppercase part-of-speech label.
+ */
+function determinePartOfSpeech(string $english, string $spanish): string
+{
+    $candidate = trim(strtolower($english));
+
+    if ($candidate === '') {
+        $candidate = trim(strtolower($spanish));
+    }
+
+    if ($candidate === '') {
+        return 'UNKNOWN';
+    }
+
+    if (str_starts_with($candidate, 'to ')) {
+        return 'VERB';
+    }
+
+    if (preg_match('/\\b(to )/', $candidate)) {
+        return 'VERB';
+    }
+
+    if (preg_match('/ly$/', $candidate)) {
+        return 'ADVERB';
+    }
+
+    if (preg_match('/ing$/', $candidate)) {
+        return 'GERUND';
+    }
+
+    if (preg_match('/(ous|ful|able|ible|al|ary|ate|ive|less|ic|ent|ant|ish|y)$/', $candidate)) {
+        return 'ADJECTIVE';
+    }
+
+    if (preg_match('/(ment|tion|sion|ness|ity|ism|ship|ence|ance|age|ery|ory|ure)$/', $candidate)) {
+        return 'NOUN';
+    }
+
+    if (strpos($candidate, ' ') !== false) {
+        return 'PHRASE';
+    }
+
+    return 'NOUN';
+}
+
+/**
  * Loads the master vocabulary list from the CSV file.
  *
  * @param string $csvPath Absolute path to the vocabulary CSV.
@@ -241,6 +291,7 @@ function loadVocabulary(string $csvPath): array
             'other_common_meanings' => $entry['other_common_meanings'] ?? '',
             'key' => $identifier,
             'common_definitions' => $entry['common_definitions'] ?? '',
+            'part_of_speech' => determinePartOfSpeech($entry['english'] ?? '', $spanish),
         ];
     }
 
@@ -701,6 +752,54 @@ $pendingRows = array_values(array_filter(
     }
 
     /**
+     * Retrieves the part-of-speech label for an entry.
+     *
+     * @param {object} entry Vocabulary entry containing part-of-speech metadata.
+     * @returns {string} Part-of-speech label.
+     */
+    function getPartOfSpeech(entry) {
+        if (!entry || typeof entry.part_of_speech !== 'string' || entry.part_of_speech.trim() === '') {
+            return 'UNKNOWN';
+        }
+        return entry.part_of_speech;
+    }
+
+    /**
+     * Constructs a tooltip node used within the practice cards.
+     *
+     * @param {object} entry Vocabulary entry to describe.
+     * @returns {HTMLDivElement} Tooltip element.
+     */
+    function buildPracticeTooltip(entry) {
+        const tooltip = document.createElement('div');
+        tooltip.className = 'pointer-events-none absolute left-1/2 top-full z-20 mt-3 w-max max-w-xs -translate-x-1/2 rounded-md bg-slate-900 px-3 py-3 text-sm font-medium text-white opacity-0 shadow-lg transition-opacity duration-200 group-hover:opacity-100';
+
+        const posLine = document.createElement('div');
+        posLine.className = 'text-xs font-semibold uppercase tracking-wide text-slate-200';
+        posLine.textContent = `Part of speech: ${getPartOfSpeech(entry)}`;
+        tooltip.appendChild(posLine);
+
+        const definitions = getDefinitionLines(entry);
+        if (definitions.length > 0) {
+            const definitionList = document.createElement('ul');
+            definitionList.className = 'mt-2 list-disc space-y-1 pl-4 text-xs text-slate-200';
+            definitions.forEach((definition) => {
+                const li = document.createElement('li');
+                li.textContent = definition;
+                definitionList.appendChild(li);
+            });
+            tooltip.appendChild(definitionList);
+        } else {
+            const fallback = document.createElement('div');
+            fallback.className = 'mt-2 text-xs text-slate-300';
+            fallback.textContent = 'No additional definitions available.';
+            tooltip.appendChild(fallback);
+        }
+
+        return tooltip;
+    }
+
+    /**
      * Renders the tooltip vocabulary list respecting the language toggle.
      *
      * @returns {void}
@@ -1101,13 +1200,18 @@ $pendingRows = array_values(array_filter(
             const item = document.createElement('li');
             item.className = 'relative flex flex-col justify-between gap-4 rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm transition-shadow hover:shadow-md';
 
+            const promptWrapper = document.createElement('div');
+            promptWrapper.className = 'group relative inline-block';
+
             const prompt = document.createElement('span');
             prompt.className = 'text-lg font-semibold text-slate-900';
             prompt.textContent = languageMode === LANGUAGE_EN_TO_ES
                 ? (entry.english || 'Translation unavailable')
                 : entry.spanish;
 
-            item.appendChild(prompt);
+            promptWrapper.appendChild(prompt);
+            promptWrapper.appendChild(buildPracticeTooltip(entry));
+            item.appendChild(promptWrapper);
 
             if (activePracticeView === 'correct') {
                 const answer = document.createElement('p');
