@@ -240,6 +240,55 @@ function determinePartOfSpeech(string $english, string $spanish): string
 }
 
 /**
+ * Classifies verb sub-type (e.g. reflexive, reciprocal).
+ *
+ * @param string $spanish Original Spanish lexeme.
+ * @param string $english Primary English translation.
+ * @return string Verb type label.
+ */
+function classifyVerbType(string $spanish, string $english): string
+{
+    $spanishLower = trim(mb_strtolower($spanish, 'UTF-8'));
+    $englishLower = trim(mb_strtolower($english, 'UTF-8'));
+
+    $hasReflexiveSuffix = preg_match('/se$/u', $spanishLower) === 1;
+    $hasInternalSe = preg_match('/\\bse\\b/u', $spanishLower) === 1;
+
+    if ($hasReflexiveSuffix || $hasInternalSe) {
+        if (str_contains($englishLower, 'each other') || str_contains($englishLower, 'one another')) {
+            return 'Reciprocal verb';
+        }
+
+        // Distinguish pronominal verbs that express movement or state change.
+        if (preg_match('/^(ir|venir|quedar|poner|sentir|mover|acord|dorm|sentar|bañ|desped|quitar|romp|cas|mud|llam|pelear|enoj|relaj|acostar)/u', $spanishLower)) {
+            return 'Reflexive / pronominal verb';
+        }
+
+        return 'Pronominal verb';
+    }
+
+    if (str_contains($englishLower, 'each other') || str_contains($englishLower, 'one another')) {
+        return 'Reciprocal verb';
+    }
+
+    // Heuristic: verbs describing motion or state without obvious object.
+    if (preg_match('/\\bto (arrive|go|come|exist|sleep|live|die|travel|walk|run|swim|cry|laugh|fall|fly|grow|happen|occur|rest|wait|remain|stay)\\b/u', $englishLower)) {
+        return 'Intransitive verb (heuristic)';
+    }
+
+    if (preg_match('/\\bto (be|feel|seem|become)\\b/u', $englishLower)) {
+        return 'Linking verb';
+    }
+
+    // Default assumption: verb likely takes a direct object.
+    if ($englishLower !== '' && str_starts_with($englishLower, 'to ')) {
+        return 'Transitive verb (likely)';
+    }
+
+    return 'Verb';
+}
+
+/**
  * Loads the master vocabulary list from the CSV file.
  *
  * @param string $csvPath Absolute path to the vocabulary CSV.
@@ -281,17 +330,21 @@ function loadVocabulary(string $csvPath): array
             continue;
         }
 
+        $englishValue = $entry['english'] ?? '';
         $rawId = $entry['id'] ?? '';
         $identifier = $rawId !== '' ? $rawId : $spanish;
+        $partOfSpeech = determinePartOfSpeech($englishValue ?? '', $spanish);
+        $verbType = $partOfSpeech === 'VERB' ? classifyVerbType($spanish, $englishValue ?? '') : '';
 
         $entries[] = [
             'id' => $rawId,
             'spanish' => $spanish,
-            'english' => $entry['english'] ?? '',
+            'english' => $englishValue,
             'other_common_meanings' => $entry['other_common_meanings'] ?? '',
             'key' => $identifier,
             'common_definitions' => $entry['common_definitions'] ?? '',
-            'part_of_speech' => determinePartOfSpeech($entry['english'] ?? '', $spanish),
+            'part_of_speech' => $partOfSpeech,
+            'verb_type' => $verbType,
         ];
     }
 
@@ -765,6 +818,19 @@ $pendingRows = array_values(array_filter(
     }
 
     /**
+     * Retrieves the verb classification for an entry.
+     *
+     * @param {object} entry Vocabulary entry containing verb metadata.
+     * @returns {string} Verb classification.
+     */
+    function getVerbType(entry) {
+        if (!entry || typeof entry.verb_type !== 'string') {
+            return '';
+        }
+        return entry.verb_type;
+    }
+
+    /**
      * Constructs a tooltip node used within the practice cards.
      *
      * @param {object} entry Vocabulary entry to describe.
@@ -776,8 +842,19 @@ $pendingRows = array_values(array_filter(
 
         const posLine = document.createElement('div');
         posLine.className = 'text-xs font-semibold uppercase tracking-wide text-slate-200';
-        posLine.textContent = `Part of speech: ${getPartOfSpeech(entry)}`;
+        const partLabel = getPartOfSpeech(entry);
+        posLine.textContent = `Part of speech: ${partLabel}`;
         tooltip.appendChild(posLine);
+
+        if (partLabel === 'VERB') {
+            const verbNote = getVerbType(entry);
+            if (verbNote) {
+                const verbLine = document.createElement('div');
+                verbLine.className = 'mt-1 text-xs text-slate-200';
+                verbLine.textContent = `Verb type: ${verbNote}`;
+                tooltip.appendChild(verbLine);
+            }
+        }
 
         const definitions = getDefinitionLines(entry);
         if (definitions.length > 0) {
