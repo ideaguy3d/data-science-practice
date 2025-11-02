@@ -5,6 +5,7 @@ $csvPath = __DIR__ . '/vocab_input.csv';
 $ignorePath = __DIR__ . '/ignore.csv';
 $correctPath = __DIR__ . '/correct.csv';
 $incorrectPath = __DIR__ . '/incorrect.csv';
+$reviewPath = __DIR__ . '/to_review.csv';
 
 const LANGUAGE_ES_TO_EN = 'es_to_en';
 const LANGUAGE_EN_TO_ES = 'en_to_es';
@@ -375,6 +376,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'categorize') {
+        $category = strtolower(trim((string) ($data['category'] ?? '')));
+
+        if ($category === '') {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'error' => 'Missing category identifier.']);
+            exit;
+        }
+
+        $ignored = readKeyFile($ignorePath);
+        $review = readKeyFile($reviewPath);
+
+        if ($category === 'ignore' || $category === 'done') {
+            $ignored[$key] = true;
+            unset($review[$key]);
+        } elseif ($category === 'review') {
+            $review[$key] = true;
+            unset($ignored[$key]);
+        } elseif ($category === 'requeue') {
+            unset($review[$key], $ignored[$key]);
+        } else {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'error' => 'Unsupported category action.']);
+            exit;
+        }
+
+        $writeOk = writeKeyFile($ignorePath, $ignored) && writeKeyFile($reviewPath, $review);
+
+        if (!$writeOk) {
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'error' => 'Unable to update vocabulary category.']);
+            exit;
+        }
+
+        echo json_encode(['ok' => true, 'category' => $category]);
+        exit;
+    }
+
     if ($action === 'ignore') {
         $ignored = readKeyFile($ignorePath);
 
@@ -469,6 +508,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $ignoredKeys = readKeyFile($ignorePath);
 $correctKeys = readKeyFile($correctPath);
 $incorrectKeys = readKeyFile($incorrectPath);
+$reviewKeys = readKeyFile($reviewPath);
 
 if (!file_exists($csvPath)) {
     http_response_code(500);
@@ -479,7 +519,7 @@ if (!file_exists($csvPath)) {
 $vocabulary = loadVocabulary($csvPath);
 $availableEntries = array_values(array_filter(
     $vocabulary,
-    static fn ($entry) => !isset($ignoredKeys[$entry['key']])
+    static fn ($entry) => !isset($ignoredKeys[$entry['key']]) && !isset($reviewKeys[$entry['key']])
 ));
 
 $correctRows = array_values(array_filter(
@@ -490,6 +530,16 @@ $correctRows = array_values(array_filter(
 $incorrectRows = array_values(array_filter(
     $availableEntries,
     static fn ($entry) => isset($incorrectKeys[$entry['key']])
+));
+
+$reviewRows = array_values(array_filter(
+    $vocabulary,
+    static fn ($entry) => isset($reviewKeys[$entry['key']])
+));
+
+$doneRows = array_values(array_filter(
+    $vocabulary,
+    static fn ($entry) => isset($ignoredKeys[$entry['key']])
 ));
 
 $pendingRows = array_values(array_filter(
@@ -561,6 +611,37 @@ $pendingRows = array_values(array_filter(
 
         <section id="tooltip-panel" role="tabpanel" aria-labelledby="tooltip-tab">
             <div id="tooltip-app"></div>
+            <section id="manage-dismissed" class="hidden mt-10 rounded-lg border border-slate-200 bg-white px-5 py-6 shadow-sm transition">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900">Dismissed Words</h2>
+                        <p class="mt-1 text-sm text-slate-600">Review items you've marked for later or completed.</p>
+                    </div>
+                    <div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 shadow-sm" role="group" aria-label="Dismissed word views">
+                        <button
+                            type="button"
+                            class="dismissed-view-button rounded-md px-4 py-2 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                            data-dismissed-view="review"
+                            aria-pressed="true"
+                        >
+                            <span class="label text-slate-700">To Review</span>
+                            <span class="ml-2 inline-flex h-6 min-w-[2.25rem] items-center justify-center rounded-full bg-white px-2 text-xs font-semibold text-slate-600"
+                                  data-dismissed-count="review">0</span>
+                        </button>
+                        <button
+                            type="button"
+                            class="dismissed-view-button rounded-md px-4 py-2 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                            data-dismissed-view="done"
+                            aria-pressed="false"
+                        >
+                            <span class="label text-slate-600">Done</span>
+                            <span class="ml-2 inline-flex h-6 min-w-[2.25rem] items-center justify-center rounded-full bg-white px-2 text-xs font-semibold text-slate-600"
+                                  data-dismissed-count="done">0</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="dismissed-list" class="mt-6"></div>
+            </section>
         </section>
 
         <section id="practice-panel" class="hidden" role="tabpanel" aria-labelledby="practice-tab">
@@ -595,6 +676,16 @@ $pendingRows = array_values(array_filter(
                         <span class="label text-slate-600">Correct List</span>
                         <span class="ml-2 inline-flex h-6 min-w-[2.25rem] items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-semibold text-slate-600"
                               data-count="correct">0</span>
+                    </button>
+                    <button
+                        type="button"
+                        class="practice-view-button rounded-md px-4 py-2 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                        data-practice-view="review"
+                        aria-pressed="false"
+                    >
+                        <span class="label text-slate-600">To Review</span>
+                        <span class="ml-2 inline-flex h-6 min-w-[2.25rem] items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-semibold text-slate-600"
+                              data-count="review">0</span>
                     </button>
                 </div>
                 <div id="practice-feedback" class="hidden w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm" role="status" aria-live="polite">
@@ -636,6 +727,12 @@ $pendingRows = array_values(array_filter(
         pending: <?php echo json_encode($pendingRows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
         incorrect: <?php echo json_encode($incorrectRows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
         correct: <?php echo json_encode($correctRows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
+        review: <?php echo json_encode($reviewRows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
+    };
+
+    const dismissedState = {
+        review: <?php echo json_encode($reviewRows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
+        done: <?php echo json_encode($doneRows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
     };
 
     const tooltipContainer = document.getElementById('tooltip-app');
@@ -653,11 +750,21 @@ $pendingRows = array_values(array_filter(
         practice: document.getElementById('practice-panel'),
     };
 
+    const manageDismissSection = document.getElementById('manage-dismissed');
+    const dismissedViewButtons = document.querySelectorAll('.dismissed-view-button');
+    const dismissedListContainer = document.getElementById('dismissed-list');
+
+
     const practiceViewButtons = document.querySelectorAll('.practice-view-button');
     const practiceCounts = {
         pending: document.querySelector('[data-count="pending"]'),
         incorrect: document.querySelector('[data-count="incorrect"]'),
         correct: document.querySelector('[data-count="correct"]'),
+        review: document.querySelector('[data-count="review"]'),
+    };
+    const dismissedCounts = {
+        review: document.querySelector('[data-dismissed-count="review"]'),
+        done: document.querySelector('[data-dismissed-count="done"]'),
     };
 
     const languageToggleButtons = document.querySelectorAll('.language-toggle-button');
@@ -665,6 +772,7 @@ $pendingRows = array_values(array_filter(
     let activeTab = 'tooltip';
     let activePracticeView = 'pending';
     let languageMode = LANGUAGE_ES_TO_EN;
+    let activeDismissedView = dismissedState.review.length > 0 ? 'review' : 'done';
     const entryLookup = new Map();
 
     /**
@@ -704,6 +812,42 @@ $pendingRows = array_values(array_filter(
         removeEntryFromArray(practiceState.pending, key);
         removeEntryFromArray(practiceState.incorrect, key);
         removeEntryFromArray(practiceState.correct, key);
+        removeEntryFromArray(practiceState.review, key);
+    }
+
+    /**
+     * Adds an entry to a dismissed category if missing.
+     *
+     * @param {'review'|'done'} category Target category key.
+     * @param {object} entry Vocabulary entry to add.
+     * @returns {void}
+     */
+    function addDismissedEntry(category, entry) {
+        const bucket = dismissedState[category];
+        if (!Array.isArray(bucket)) {
+            return;
+        }
+        if (!bucket.some((item) => item.key === entry.key)) {
+            bucket.push(entry);
+        }
+    }
+
+    /**
+     * Removes an entry from a dismissed category.
+     *
+     * @param {'review'|'done'} category Target category key.
+     * @param {string} key Vocabulary identifier.
+     * @returns {void}
+     */
+    function removeDismissedEntry(category, key) {
+        const bucket = dismissedState[category];
+        if (!Array.isArray(bucket)) {
+            return;
+        }
+        const index = bucket.findIndex((item) => item.key === key);
+        if (index !== -1) {
+            bucket.splice(index, 1);
+        }
     }
 
     /**
@@ -730,6 +874,7 @@ $pendingRows = array_values(array_filter(
         const pendingCount = filterEntriesForLanguage(practiceState.pending).length;
         const incorrectCount = filterEntriesForLanguage(practiceState.incorrect).length;
         const correctCount = filterEntriesForLanguage(practiceState.correct).length;
+        const reviewCount = filterEntriesForLanguage(practiceState.review).length;
 
         if (practiceCounts.pending) {
             practiceCounts.pending.textContent = pendingCount;
@@ -739,6 +884,9 @@ $pendingRows = array_values(array_filter(
         }
         if (practiceCounts.correct) {
             practiceCounts.correct.textContent = correctCount;
+        }
+        if (practiceCounts.review) {
+            practiceCounts.review.textContent = reviewCount;
         }
     }
 
@@ -785,6 +933,188 @@ $pendingRows = array_values(array_filter(
             return;
         }
         practiceFeedbackContainer.classList.add('hidden');
+    }
+
+    /**
+     * Updates the badge counts for dismissed categories.
+     *
+     * @returns {void}
+     */
+    function updateDismissedCounts() {
+        if (dismissedCounts.review) {
+            dismissedCounts.review.textContent = dismissedState.review.length;
+        }
+        if (dismissedCounts.done) {
+            dismissedCounts.done.textContent = dismissedState.done.length;
+        }
+    }
+
+    /**
+     * Ensures the dismissed section visibility matches the data.
+     *
+     * @returns {boolean} True when the section should remain visible.
+     */
+    function ensureDismissedVisibility() {
+        if (!manageDismissSection) {
+            return false;
+        }
+
+        const hasReview = dismissedState.review.length > 0;
+        const hasDone = dismissedState.done.length > 0;
+
+        if (!hasReview && !hasDone) {
+            manageDismissSection.classList.add('hidden');
+            return false;
+        }
+
+        manageDismissSection.classList.remove('hidden');
+
+        if (activeDismissedView === 'review' && !hasReview && hasDone) {
+            activeDismissedView = 'done';
+        } else if (activeDismissedView === 'done' && !hasDone && hasReview) {
+            activeDismissedView = 'review';
+        }
+
+        return true;
+    }
+
+    /**
+     * Renders the dismissed list contents.
+     *
+     * @returns {void}
+     */
+    function renderDismissedList() {
+        if (!dismissedListContainer) {
+            return;
+        }
+
+        dismissedListContainer.innerHTML = '';
+
+        dismissedViewButtons.forEach((button) => {
+            const view = button.getAttribute('data-dismissed-view');
+            const isActive = view === activeDismissedView;
+            button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            button.classList.toggle('bg-slate-900', isActive);
+            button.classList.toggle('text-white', isActive);
+            button.classList.toggle('shadow', isActive);
+
+            const label = button.querySelector('.label');
+            if (label) {
+                label.classList.toggle('text-white', isActive);
+                label.classList.toggle('text-slate-700', isActive);
+                label.classList.toggle('text-slate-600', !isActive);
+            }
+        });
+
+        const source = dismissedState[activeDismissedView] ?? [];
+
+        if (!Array.isArray(source) || source.length === 0) {
+            const empty = document.createElement('p');
+            empty.className = 'rounded-lg border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm text-slate-500';
+            empty.textContent = activeDismissedView === 'review'
+                ? 'No words marked for review yet.'
+                : 'No completed words recorded yet.';
+            dismissedListContainer.appendChild(empty);
+            return;
+        }
+
+        const list = document.createElement('ul');
+        list.className = 'grid gap-4 sm:grid-cols-2 md:grid-cols-3';
+
+        source.forEach((entry) => {
+            const item = document.createElement('li');
+            item.className = 'flex h-full flex-col justify-between gap-3 rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm';
+
+            const title = document.createElement('h3');
+            title.className = 'text-base font-semibold text-slate-900';
+            title.textContent = entry.spanish;
+
+            const translation = document.createElement('p');
+            translation.className = 'text-sm text-slate-600';
+            translation.textContent = entry.english || 'Translation unavailable';
+
+            item.appendChild(title);
+            item.appendChild(translation);
+
+            const definitions = getDefinitionLines(entry);
+            if (definitions.length > 0) {
+                const defList = document.createElement('ul');
+                defList.className = 'list-disc space-y-1 pl-5 text-xs text-slate-500';
+                definitions.forEach((definition) => {
+                    const li = document.createElement('li');
+                    li.textContent = definition;
+                    defList.appendChild(li);
+                });
+                item.appendChild(defList);
+            }
+
+            const actions = document.createElement('div');
+            actions.className = 'mt-3 flex flex-wrap gap-2';
+
+            const actionButtonClass = 'inline-flex items-center justify-center rounded-md border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400';
+
+            if (activeDismissedView === 'review') {
+                const doneBtn = document.createElement('button');
+                doneBtn.type = 'button';
+                doneBtn.className = actionButtonClass;
+                doneBtn.textContent = 'Mark Done';
+                doneBtn.addEventListener('click', () => {
+                    markEntryAsDone(entry);
+                });
+                actions.appendChild(doneBtn);
+
+                const requeueBtn = document.createElement('button');
+                requeueBtn.type = 'button';
+                requeueBtn.className = actionButtonClass;
+                requeueBtn.textContent = 'Requeue';
+                requeueBtn.addEventListener('click', () => {
+                    requeueEntry(entry);
+                });
+                actions.appendChild(requeueBtn);
+            } else {
+                const reviewBtn = document.createElement('button');
+                reviewBtn.type = 'button';
+                reviewBtn.className = actionButtonClass;
+                reviewBtn.textContent = 'Mark for Review';
+                reviewBtn.addEventListener('click', () => {
+                    moveEntryToReview(entry);
+                });
+                actions.appendChild(reviewBtn);
+
+                const requeueBtn = document.createElement('button');
+                requeueBtn.type = 'button';
+                requeueBtn.className = actionButtonClass;
+                requeueBtn.textContent = 'Requeue';
+                requeueBtn.addEventListener('click', () => {
+                    requeueEntry(entry);
+                });
+                actions.appendChild(requeueBtn);
+            }
+
+            item.appendChild(actions);
+            list.appendChild(item);
+        });
+
+        dismissedListContainer.appendChild(list);
+    }
+
+    /**
+     * Refreshes the dismissed section visibility and content.
+     *
+     * @returns {void}
+     */
+    function refreshDismissedView() {
+        const visible = ensureDismissedVisibility();
+        updateDismissedCounts();
+
+        if (!visible) {
+            if (dismissedListContainer) {
+                dismissedListContainer.innerHTML = '';
+            }
+            return;
+        }
+
+        renderDismissedList();
     }
 
     /**
@@ -897,6 +1227,8 @@ $pendingRows = array_values(array_filter(
         list.className = 'grid gap-4 sm:grid-cols-2 md:grid-cols-4';
 
         entries.forEach((entry) => {
+            entryLookup.set(entry.key, entry);
+
             const item = document.createElement('li');
             item.className = 'group relative bg-white border border-slate-200 rounded-lg px-5 py-4 shadow-sm transition-shadow hover:shadow-md';
 
@@ -916,8 +1248,18 @@ $pendingRows = array_values(array_filter(
                 handleDismissClick(event, entry, dismiss, item);
             });
 
+            const reviewButton = document.createElement('button');
+            reviewButton.type = 'button';
+            reviewButton.className = 'absolute right-12 top-3 flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 transition hover:text-slate-700 hover:border-slate-300';
+            reviewButton.setAttribute('aria-label', `Mark ${entry.spanish} for review`);
+            reviewButton.innerHTML = '&#63;';
+
+            reviewButton.addEventListener('click', (event) => {
+                handleReviewClick(event, entry, reviewButton, item);
+            });
+
             const tooltip = document.createElement('div');
-            tooltip.className = 'absolute left-1/2 top-full z-10 mt-3 w-max max-w-xs -translate-x-1/2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white opacity-0 pointer-events-none transition-opacity duration-200 group-hover:opacity-100';
+            tooltip.className = 'absolute left-1/2 top-full z-10 mt-3 w-max max-w-xs -translate-x-1/2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white opacity-0 pointer-events-none transition-opacity duration-200';
 
             const tooltipValue = languageMode === LANGUAGE_EN_TO_ES
                 ? entry.spanish
@@ -942,6 +1284,25 @@ $pendingRows = array_values(array_filter(
             item.appendChild(word);
             item.appendChild(dismiss);
             item.appendChild(tooltip);
+
+            let tooltipTimer;
+            item.addEventListener('mouseenter', () => {
+                tooltipTimer = window.setTimeout(() => {
+                    tooltip.classList.remove('opacity-0');
+                    tooltip.classList.add('opacity-100');
+                }, 400);
+            });
+
+            item.addEventListener('mouseleave', () => {
+                if (tooltipTimer) {
+                    clearTimeout(tooltipTimer);
+                    tooltipTimer = undefined;
+                }
+                tooltip.classList.remove('opacity-100');
+                tooltip.classList.add('opacity-0');
+            });
+
+            item.appendChild(reviewButton);
             list.appendChild(item);
         });
 
@@ -963,31 +1324,7 @@ $pendingRows = array_values(array_filter(
         dismiss.classList.add('opacity-60', 'cursor-not-allowed');
 
         try {
-            const response = await fetch(window.location.pathname, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    action: 'ignore',
-                    key: entry.key,
-                    languageMode,
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error(`Request failed with status ${response.status}`);
-            }
-
-            const result = await response.json();
-            if (!result || !result.ok) {
-                throw new Error(result?.error ?? 'Unknown error');
-            }
-
-            removeEntryFromArray(tooltipState.entries, entry.key);
-            removeEntryFromPractice(entry.key);
-            renderTooltipList();
-            renderPracticeList();
+            await updateEntryCategory(entry, 'done');
         } catch (error) {
             console.error('Unable to ignore vocabulary entry:', error);
             dismiss.disabled = false;
@@ -996,7 +1333,135 @@ $pendingRows = array_values(array_filter(
             setTimeout(() => {
                 dismiss.classList.remove('text-red-500');
             }, 1500);
+            return;
         }
+
+        removeEntryFromArray(tooltipState.entries, entry.key);
+        removeEntryFromPractice(entry.key);
+        addEntryIfMissing(dismissedState.done, entry);
+        updatePracticeCounts();
+        renderPracticeList();
+        refreshDismissedView();
+        renderTooltipList();
+    }
+
+    /**
+     * Handles moving an entry into the review queue.
+     *
+     * @param {MouseEvent} event Click event.
+     * @param {object} entry Vocabulary entry to mark for review.
+     * @param {HTMLButtonElement} reviewButton Triggering button.
+     * @param {HTMLLIElement} item List element enclosing controls.
+     * @returns {Promise<void>}
+     */
+    async function handleReviewClick(event, entry, reviewButton, item) {
+        event.stopPropagation();
+        reviewButton.disabled = true;
+        reviewButton.classList.add('opacity-60', 'cursor-not-allowed');
+
+        try {
+            await updateEntryCategory(entry, 'review');
+        } catch (error) {
+            console.error('Unable to move entry to review list:', error);
+            reviewButton.disabled = false;
+            reviewButton.classList.remove('opacity-60', 'cursor-not-allowed');
+            reviewButton.classList.add('text-red-500');
+            setTimeout(() => {
+                reviewButton.classList.remove('text-red-500');
+            }, 1500);
+            return;
+        }
+
+        removeEntryFromArray(tooltipState.entries, entry.key);
+        removeEntryFromPractice(entry.key);
+        addEntryIfMissing(practiceState.review, entry);
+        addDismissedEntry('review', entry);
+        item.remove();
+        updatePracticeCounts();
+        renderPracticeList();
+        refreshDismissedView();
+    }
+
+    /**
+     * Persists category changes for a vocabulary entry.
+     *
+     * @param {object} entry Target vocabulary entry.
+     * @param {'ignore'|'review'|'done'|'requeue'} category Desired category action.
+     * @returns {Promise<void>}
+     */
+    async function updateEntryCategory(entry, category) {
+        const response = await fetch(window.location.pathname, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'categorize',
+                key: entry.key,
+                category,
+                languageMode,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Request failed with status ${response.status}`);
+        }
+
+        const result = await response.json();
+        if (!result || !result.ok) {
+            throw new Error(result?.error ?? 'Unknown error');
+        }
+    }
+
+    async function markEntryAsDone(entry) {
+        try {
+            await updateEntryCategory(entry, 'done');
+        } catch (error) {
+            console.error('Unable to mark entry as done:', error);
+            return;
+        }
+
+        removeDismissedEntry('review', entry.key);
+        addDismissedEntry('done', entry);
+        removeEntryFromPractice(entry.key);
+        updatePracticeCounts();
+        renderPracticeList();
+        refreshDismissedView();
+    }
+
+    async function moveEntryToReview(entry) {
+        try {
+            await updateEntryCategory(entry, 'review');
+        } catch (error) {
+            console.error('Unable to move entry to review:', error);
+            return;
+        }
+
+        removeDismissedEntry('done', entry.key);
+        addDismissedEntry('review', entry);
+        addEntryIfMissing(practiceState.review, entry);
+        updatePracticeCounts();
+        renderPracticeList();
+        refreshDismissedView();
+    }
+
+    async function requeueEntry(entry) {
+        try {
+            await updateEntryCategory(entry, 'requeue');
+        } catch (error) {
+            console.error('Unable to requeue entry:', error);
+            return;
+        }
+
+        removeDismissedEntry('review', entry.key);
+        removeDismissedEntry('done', entry.key);
+        removeEntryFromPractice(entry.key);
+        addEntryIfMissing(practiceState.pending, entry);
+        addEntryIfMissing(tooltipState.entries, entry);
+        updatePracticeCounts();
+        renderPracticeList();
+        refreshDismissedView();
+        renderTooltipList();
     }
 
     /**
@@ -1431,6 +1896,17 @@ $pendingRows = array_values(array_filter(
         });
     });
 
+    dismissedViewButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            const view = button.getAttribute('data-dismissed-view');
+            if (!view || view === activeDismissedView) {
+                return;
+            }
+            activeDismissedView = view;
+            refreshDismissedView();
+        });
+    });
+
     languageToggleButtons.forEach((button) => {
         button.addEventListener('click', () => {
             updateLanguageMode(button);
@@ -1451,6 +1927,7 @@ $pendingRows = array_values(array_filter(
 
     renderTooltipList();
     renderPracticeList();
+    refreshDismissedView();
 </script>
 </body>
 </html>
