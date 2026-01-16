@@ -1,13 +1,8 @@
-
-
-console.log('hello world !! Nice to see you :)');
-
+let logs = []; 
 
 function UndirectedGraph () {
     this.edges = {}
 }
-
-console.log(UndirectedGraph.edges)
 
 UndirectedGraph.prototype.addVertex = function (vertex) {
     this.edges[vertex] = {};
@@ -67,20 +62,68 @@ graph1.addEdge(1, 5, 88);
 // graph2.removeVertex(1);
 // graph2.removeEdge(2, 3);
 
-function DirectedGraph() {
-    this.edges = {};
-}
+class DirectedGraph {
+    constructor() {
+        this.edges = {};
+    }
+    
+    addVertex(vertex) {
+        this.edges[vertex] = {};
+    }
+    
+    addEdge(originVertex, destVertex, weight) {
+        if (weight === undefined) {
+            weight = 0;
+        }
 
-DirectedGraph.prototype.addVertex = function (vertex) {
-    this.edges[vertex] = {};
-}
+        this.edges[originVertex][destVertex] = weight;
+    }
+    
+    removeEdge(originVertex, destVertex) {
+        if (this.edges[originVertex] && this.edges[originVertex][destVertex] != undefined) {
+            delete this.edges[originVertex][destVertex];
+        }
+    }
+    
+    removeVertex(vertex) {
+        for (var adjacentVertex in this.edges[vertex]) {
+            this.removeEdge(adjacentVertex, vertex);
+        }
 
-DirectedGraph.prototype.addEdge = function (originVertex, destVertex, weight) {
-    if (weight === undefined) {
-        weight = 0;
+        delete this.edges[vertex];
+    }
+    
+    bfs(vertex) {
+        var queue = [], visited = {};
+
+        queue.push(vertex);
+
+        while (queue.length) {
+            vertex = queue.shift();
+            if (!visited[vertex]) {
+                visited[vertex] = true;
+                logs.push(vertex);
+                for (var adjacentVertex in this.edges[vertex]) {
+                    queue.push(adjacentVertex);
+                }
+            }
+        }
+    }
+    
+    dfs(vertex) {
+        var visited = {};
+        this._dfs(vertex, visited);
     }
 
-    this.edges[originVertex][destVertex] = weight; 
+    _dfs(vertex, visited) {
+        visited[vertex] = true;
+        logs.push(vertex);
+        for (var adjacentVertex in this.edges[vertex]) {
+            if (!visited[adjacentVertex]) {
+                this._dfs(adjacentVertex, visited);
+            }
+        }
+    }
 }
 
 var digraph1 = new DirectedGraph();
@@ -90,61 +133,9 @@ digraph1.addVertex("C");
 digraph1.addEdge("A", "B", 1);
 digraph1.addEdge("B", "C", 2);
 digraph1.addEdge("C", "A", 3);
-
 digraph1.addVertex("D");
 digraph1.addEdge("B", "D", 2)
-console.log(digraph1); 
-
-DirectedGraph.prototype.removeEdge = function (originVertex, destVertex) {
-    if (this.edges[originVertex] && this.edges[originVertex][destVertex] != undefined) {
-        delete this.edges[originVertex][destVertex]; 
-    }
-}
-
-DirectedGraph.prototype.removeVertex = function (vertex) {
-    for (var adjacentVertex in this.edges[vertex]) {
-        this.removeEdge(adjacentVertex, vertex)
-    }
-
-    delete this.edges[vertex]; 
-}
-
-DirectedGraph.prototype.bfs = function (vertex) {
-    var queue = [], 
-        visited = {}; 
-    
-    queue.push(vertex); 
-
-    while (queue.length) {
-        vertex = queue.shift(); 
-        if (!visited[vertex]) {
-            visited[vertex] = true; 
-            console.log(vertex); 
-            for (var adjacentVertex in this.edges[vertex]) {
-                queue.push(adjacentVertex); 
-            }
-        }
-    }
-}
-
 // digraph1.bfs("B"); 
-
-
-// Depth First Search
-DirectedGraph.prototype.dfs = function (vertex) {
-    var visited = {};
-    this._dfs(vertex, visited);
-}
-
-DirectedGraph.prototype._dfs = function (vertex, visited) {
-    visited[vertex] = true; 
-    console.log(vertex)
-    for (var adjacentVertex in this.edges[vertex]) {
-        if (!visited[adjacentVertex]) {
-            this._dfs(adjacentVertex, visited); 
-        }
-    }
-}
 
 var graph2 = new DirectedGraph();
 graph2.addVertex(1);
@@ -157,7 +148,6 @@ graph2.addEdge(2, 3, 8);
 graph2.addEdge(3, 4, 10);
 graph2.addEdge(4, 5, 100);
 graph2.addEdge(1, 5, 88);
-
 graph2.dfs(1)
 
 
@@ -173,50 +163,11 @@ function println(...args) {
   out.textContent += args.join(" ") + "\n";
 }
 
-const graph = {
-  A: ["B", "C"],
-  B: ["D", "E"],
-  C: ["E"],
-  D: [],
-  E: ["F"],
-  F: []
-};
 
-// =======================
-// BFS PRACTICE
-// =======================
+// println("BFS order:\n");
+println(logs.join(" -> "));
 
-function bfs(start) {
-  const queue = [start];
-  const visited = new Set([start]);
-  const order = [];
 
-  while (queue.length > 0) {
-    const node = queue.shift();
-    order.push(node);
-
-    for (const neighbor of graph[node]) {
-      if (!visited.has(neighbor)) {
-        visited.add(neighbor);
-        queue.push(neighbor);
-      }
-    }
-  }
-  return order;
-}
-
-println("BFS order:");
-println(bfs("A").join(" -> "));
-
-// =======================
-// YOUR NEXT DRILLS
-// =======================
-
-// 1. Implement DFS (iterative)
-// 2. Implement DFS (recursive)
-// 3. Shortest path BFS
-// 4. Connected components
-// 5. Cycle detection
 
 
 
