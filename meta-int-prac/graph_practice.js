@@ -1,51 +1,54 @@
 let logs = []; 
 
-function UndirectedGraph () {
-    this.edges = {}
-}
-
-UndirectedGraph.prototype.addVertex = function (vertex) {
-    this.edges[vertex] = {};
-}
-
-UndirectedGraph.prototype.addEdge = function (vertex1, vertex2, weight) {
-    if (weight == undefined) {
-        weight = 0
+class UndirectedGraph {
+    constructor() {
+        this.edges = {};
     }
 
-    this.edges[vertex1][vertex2] = weight;
-    this.edges[vertex2][vertex1] = weight;
+    addVertex(vertex) {
+        this.edges[vertex] = {};
+    }
+    
+    addEdge(vertex1, vertex2, weight) {
+        if (weight == undefined) {
+            weight = 0;
+        }
+
+        this.edges[vertex1][vertex2] = weight;
+        this.edges[vertex2][vertex1] = weight;
+    }
+    
+    removeEdge(vertex1, vertex2) {
+        if (this.edges[vertex1] && this.edges[vertex1][vertex2] != undefined) {
+            delete this.edges[vertex1][vertex2];
+        }
+
+        if (this.edges[vertex2] && this.edges[vertex2][vertex1] != undefined) {
+            delete this.edges[vertex2][vertex1];
+        }
+    }
+    
+    removeVertex(vertex) {
+        for (var adjacentVertex in this.edges[vertex]) {
+            this.removeEdge(adjacentVertex, vertex);
+        }
+
+        delete this.edges[vertex];
+    }
 }
 
-UndirectedGraph.prototype.removeEdge = function(vertex1, vertex2) {
-    if (this.edges[vertex1] && this.edges[vertex1][vertex2] != undefined) {
-        delete this.edges[vertex1][vertex2];
-    }
 
-    if (this.edges[vertex2] && this.edges[vertex2][vertex1] != undefined) {
-        delete this.edges[vertex2][vertex1]; 
-    }
-}
-
-UndirectedGraph.prototype.removeVertex = function (vertex) {
-    for (var adjacentVertex in this.edges[vertex]) {
-        this.removeEdge(adjacentVertex, vertex); 
-    }
-
-    delete this.edges[vertex]; 
-}
-
-var graph1 = new UndirectedGraph();
-graph1.addVertex(1);
-graph1.addVertex(2);
-graph1.addEdge(1, 2, 1);
-graph1.addVertex(3);
-graph1.addVertex(4);
-graph1.addVertex(5); 
-graph1.addEdge(2, 3, 8);
-graph1.addEdge(3, 4, 10);
-graph1.addEdge(4, 5, 100);
-graph1.addEdge(1, 5, 88); 
+// var graph1 = new UndirectedGraph();
+// graph1.addVertex(1);
+// graph1.addVertex(2);
+// graph1.addEdge(1, 2, 1);
+// graph1.addVertex(3);
+// graph1.addVertex(4);
+// graph1.addVertex(5); 
+// graph1.addEdge(2, 3, 8);
+// graph1.addEdge(3, 4, 10);
+// graph1.addEdge(4, 5, 100);
+// graph1.addEdge(1, 5, 88); 
 
 // var graph2 = new UndirectedGraph();
 // graph2.addVertex(1);
@@ -61,6 +64,24 @@ graph1.addEdge(1, 5, 88);
 // graph2.removeVertex(5);
 // graph2.removeVertex(1);
 // graph2.removeEdge(2, 3);
+
+function _is_empty(obj) {
+    return Object.keys(obj).length === 0; 
+}
+
+function _extract_min(Q, dist) {
+    var minimum_distance = Infinity,
+        node_with_minimum_distance = null; 
+
+    for(var node in Q) {
+        if (dist[node] < minimum_distance) {
+            minimum_distance = dist[node];
+            node_with_minimum_distance = node; 
+        }
+    }
+
+    return node_with_minimum_distance; 
+}
 
 class DirectedGraph {
     constructor() {
@@ -92,23 +113,6 @@ class DirectedGraph {
             delete this.edges[originVertex][destVertex];
         }
     }
-    
-    bfs_1(vertex) {
-        var queue = [], visited = {};
-
-        queue.push(vertex);
-
-        while (queue.length) {
-            vertex = queue.shift();
-            if (!visited[vertex]) {
-                visited[vertex] = true;
-                logs.push(vertex);
-                for (var adjacentVertex in this.edges[vertex]) {
-                    queue.push(adjacentVertex);
-                }
-            }
-        }
-    }
 
     bfs(vertex) {
         var queue = [], visited = {}; 
@@ -123,21 +127,6 @@ class DirectedGraph {
                 for (var adjacent_vertex in this.edges[vertex]) {
                     queue.push(adjacent_vertex); 
                 }
-            }
-        }
-    }
-    
-    dfs_1(vertex) {
-        var visited = {};
-        this._dfs(vertex, visited);
-    }
-
-    _dfs_1(vertex, visited) {
-        visited[vertex] = true;
-        logs.push(vertex);
-        for (var adjacentVertex in this.edges[vertex]) {
-            if (!visited[adjacentVertex]) {
-                this._dfs(adjacentVertex, visited);
             }
         }
     }
@@ -156,76 +145,138 @@ class DirectedGraph {
             }
         }
     }
+
+    dijkstra(source) {
+        var Q = {}, dist = {}; 
+
+        for (var vertex in this.edges) {
+            dist[vertex] = Infinity; 
+            Q[vertex] = this.edges[vertex]; 
+        }
+        dist[source] = 0
+
+        while(!_is_empty(Q)) {
+            var u = _extract_min(Q, dist); 
+
+            delete Q[u]; 
+
+            for (var neighbor in this.edges[u]) {
+                var alt = dist[u] + this.edges[u][neighbor]; 
+                if (alt < dist[neighbor]) {
+                    dist[neighbor] = alt; 
+                }
+            }
+        }
+
+        return dist; 
+    }
+
+    topo_sort_util(v, visited, stack) {
+        // this part is not in book because he made a fucking mistake 🤬
+        visited[v] = v; 
+
+        for (var item in this.edges[v]) {
+            if(visited.hasOwnProperty(item) == false) {
+                this.topo_sort_util(item, visited, stack);
+            }
+        }
+        stack.unshift(v); 
+    }
+
+    topo_sort() {
+        var visited = {}, stack = []; 
+
+        for (var item in this.edges) {
+            if (visited.hasOwnProperty(item) == false) {
+                this.topo_sort_util(item, visited, stack); 
+            }
+        }
+
+        return stack; 
+    }
 }
 
-// var digraph1 = new DirectedGraph();
-// digraph1.addVertex("A");
-// digraph1.addVertex("B");
-// digraph1.addVertex("C");
-// digraph1.addEdge("A", "B", 1);
-// digraph1.addEdge("B", "C", 2);
-// digraph1.addEdge("C", "A", 3);
-// digraph1.addVertex("D");
-// digraph1.addEdge("B", "D", 2)
+
+var dg_topo = new DirectedGraph();
+dg_topo.addVertex('A');
+dg_topo.addVertex('B');
+dg_topo.addVertex('C');
+dg_topo.addVertex('D');
+dg_topo.addVertex('E');
+dg_topo.addVertex('F');
+dg_topo.addEdge('B', 'A');
+dg_topo.addEdge('D', 'C');
+dg_topo.addEdge('D', 'B');
+dg_topo.addEdge('B', 'A');
+dg_topo.addEdge('A', 'F');
+dg_topo.addEdge('E', 'C');
+var topo_order = dg_topo.topo_sort();
+console.log(dg_topo); 
+console.log(topo_order); 
+
+// var dgraph1 = new DirectedGraph();
+// dgraph1.addVertex("A");
+// dgraph1.addVertex("B");
+// dgraph1.addVertex("C");
+// dgraph1.addVertex("D");
+// dgraph1.addVertex("E"); 
+// dgraph1.addEdge("A", "B", 1);
+// dgraph1.addEdge("B", "C", 1);
+// dgraph1.addEdge("C", "A", 1);
+// dgraph1.addEdge("C", "E", 1);
+// dgraph1.addEdge("C", "D", 1);
+// dgraph1.addEdge("A", "D", 1); 
+// dgraph1.addEdge("D", "E", 1); 
+// - BREADTH -
+// dgraph1.bfs("B"); 
+// logs.push(dgraph1.dijkstra("A").toString()); 
+
+// var dgraph1b = new DirectedGraph();
+// dgraph1b.addVertex("A");
+// dgraph1b.addVertex("B");
+// dgraph1b.addVertex("C");
+// dgraph1b.addVertex("D");
+// dgraph1b.addVertex("E");
+// dgraph1b.addVertex("F");
+// dgraph1b.addVertex("G");
+// dgraph1b.addVertex("H");
+// dgraph1b.addVertex("i");
+// dgraph1b.addVertex("j");
+// dgraph1b.addVertex("k");
+// dgraph1b.addEdge("A", "B");
+// dgraph1b.addEdge("B", "C");
+// dgraph1b.addEdge("B", "E");
+// dgraph1b.addEdge("B", "j");
+// dgraph1b.addEdge("B", "k");
+// dgraph1b.addEdge("C", "D");
+// dgraph1b.addEdge("D", "G");
+// dgraph1b.addEdge("D", "F");
+// dgraph1b.addEdge("G", "H");
+// dgraph1b.addEdge("F", "i");
 // BREADTH
-// digraph1.bfs("B"); 
-
-var digraph1b = new DirectedGraph();
-digraph1b.addVertex("A");
-digraph1b.addVertex("B");
-digraph1b.addVertex("C");
-digraph1b.addVertex("D");
-digraph1b.addVertex("E");
-digraph1b.addVertex("F");
-digraph1b.addVertex("G");
-digraph1b.addVertex("H");
-digraph1b.addVertex("i");
-digraph1b.addVertex("j");
-digraph1b.addVertex("k");
-digraph1b.addEdge("A", "B");
-digraph1b.addEdge("B", "C");
-digraph1b.addEdge("B", "E");
-digraph1b.addEdge("B", "j");
-digraph1b.addEdge("B", "k");
-digraph1b.addEdge("C", "D");
-digraph1b.addEdge("D", "G");
-digraph1b.addEdge("D", "F");
-digraph1b.addEdge("G", "H");
-digraph1b.addEdge("F", "i");
-// BREADTH
-// digraph1b.bfs("A"); 
+// dgraph1b.bfs("A"); 
 // DEPTH 
-digraph1b.dfs("A"); 
+// dgraph1b.dfs("A"); 
 
-
-// var digraph2 = new DirectedGraph();
-// digraph2.addVertex(1);
-// digraph2.addVertex(2);
-// digraph2.addEdge(1, 2, 1);
-// digraph2.addVertex(3);
-// digraph2.addVertex(4);
-// digraph2.addVertex(5);
-// digraph2.addEdge(2, 3, 8);
-// digraph2.addEdge(3, 4, 10);
-// digraph2.addEdge(4, 5, 100);
-// digraph2.addEdge(1, 5, 88);
+// var dgraph2 = new DirectedGraph();
+// dgraph2.addVertex(1);
+// dgraph2.addVertex(2);
+// dgraph2.addEdge(1, 2, 1);
+// dgraph2.addVertex(3);
+// dgraph2.addVertex(4);
+// dgraph2.addVertex(5);
+// dgraph2.addEdge(2, 3, 8);
+// dgraph2.addEdge(3, 4, 10);
+// dgraph2.addEdge(4, 5, 100);
+// dgraph2.addEdge(1, 5, 88);
 // DEPTH 
-// digraph2.dfs(1)
+// dgraph2.dfs(1)
 
-
-
-// ChatGPT code:
-// =======================
-// SAMPLE GRAPH (EDIT ME)
-// =======================
 
 const out = document.getElementById("output");
-
 function println(...args) {
   out.textContent += args.join(" ") + "\n";
 }
-
-
 // println("BFS order:\n");
 println(logs.join(" -> "));
 
